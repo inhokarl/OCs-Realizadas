@@ -83,7 +83,7 @@ button:hover { opacity: 0.85; }
 
 .linha {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr 0.9fr 0.9fr 0.6fr 0.7fr 0.9fr 0.8fr 1fr 1fr;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr 0.8fr 0.8fr 0.6fr 0.6fr 0.8fr 0.8fr 0.8fr 1fr 1fr;
   gap: 3px;
   padding: 6px 3px;
   border-bottom: 1px solid #eee;
@@ -234,6 +234,12 @@ button:hover { opacity: 0.85; }
     <option value="SIM">SIM</option>
   </select>
 
+  <label>Notificada?</label>
+  <select id="notificada">
+   <option value="NAO">NÃO</option>
+   <option value="SIM">SIM</option>
+  </select>
+
   <div id="campoCi">
     <label>Quantidade de CI</label>
     <input id="ci" type="number" placeholder="Ex: 5" min="0">
@@ -324,15 +330,40 @@ function toggleCi() {
 }
 
 function calcularTempo(dataInicio, dataFim) {
-  if (!dataInicio || !dataFim) return { horas: null, dias: null };
+  if (!dataInicio || !dataFim) {
+    return { horas: null, dias: null };
+  }
+
   const ini = new Date(dataInicio);
   const fim = new Date(dataFim);
+
   const diffMs = fim - ini;
-  if (diffMs <= 0) return { horas: "0.0", dias: "0.00" };
-  const h = diffMs / (1000 * 60 * 60);
+
+  if (diffMs <= 0) {
+    return { horas: "0.0", dias: "0" };
+  }
+
+  const horas = diffMs / (1000 * 60 * 60);
+
+  const inicioDia = new Date(
+    ini.getFullYear(),
+    ini.getMonth(),
+    ini.getDate()
+  );
+
+  const fimDia = new Date(
+    fim.getFullYear(),
+    fim.getMonth(),
+    fim.getDate()
+  );
+
+  const dias = Math.floor(
+    (fimDia - inicioDia) / (1000 * 60 * 60 * 24)
+  );
+
   return {
-    horas: h.toFixed(1),
-    dias: (h / 24).toFixed(2)
+    horas: horas.toFixed(1),
+    dias: dias
   };
 }
 
@@ -372,7 +403,7 @@ function add() {
   const concl   = document.getElementById("dataConclusao").value;
   const posCI   = document.getElementById("possuiCi").value;
   const qtdCI   = posCI === "SIM" ? (Number(document.getElementById("ci").value) || 0) : 0;
-
+  const notificada = document.getElementById("notificada").value;
   if (!ocVal || !eqVal || !solic) {
     alert("Preencha: Número da OC, Equipe e Data de Solicitação.");
     return;
@@ -392,7 +423,8 @@ function add() {
     data: solic,
     dataConclusao: concl,
     possuiCi: posCI,
-    ci: qtdCI
+    ci: qtdCI,
+    notificada: notificada
   };
 
   if (editIndex === null) {
@@ -423,6 +455,7 @@ function editar(i) {
   editIndex = i;
   document.getElementById("btnAdd").innerText = "Atualizar";
   window.scrollTo(0, 0);
+  document.getElementById("notificada").value = d.notificada || "NAO";
 }
 
 function excluir(i) {
@@ -445,6 +478,7 @@ function limparCampos() {
   });
   document.getElementById("possuiCi").value = "NAO";
   document.getElementById("campoCi").style.display = "none";
+  document.getElementById("notificada").value = "NAO";
 }
 
 /* ══════════════════════════════════════
@@ -509,6 +543,7 @@ function visualizar() {
       '<div>' + d.utd + '</div>' +
       '<div>' + (d.possuiCi === "SIM" ? "SIM" : "NÃO") + '</div>' +
       '<div>' + (d.possuiCi === "SIM" ? d.ci : "-") + '</div>' +
+      '<div>' + (d.notificada || "NAO") + '</div>' +
       '<div>' + horasExib + '</div>' +
       '<div>' + diasExib + '</div>' +
       '<div>' + fmtData(d.data) + '</div>' +
@@ -531,7 +566,7 @@ function visualizar() {
     '<div class="tabela">' +
       '<div class="linha topoTabela">' +
         '<div>OC</div><div>Equipe</div><div>Processo</div><div>Base</div>' +
-        '<div>UTD</div><div>CI?</div><div>Qtd CI</div><div>Horas</div>' +
+        '<div>UTD</div><div>CI?</div><div>Qtd CI</div><div>Notificada</div><div>Horas</div>' +
         '<div>Dias</div><div>Dt Solic.</div><div>Dt Conclusão</div>' +
       '</div>' +
       linhasHTML +
@@ -581,7 +616,7 @@ function gerarPDF() {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("ACOMPANHAMENTO - TP - LV - ENERGY", pageW / 2, 10, { align: "center" });
+  doc.text("ACOMPANHAMENTO - TP - LV - EPs", pageW / 2, 10, { align: "center" });
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -628,28 +663,30 @@ function gerarPDF() {
 
   /* ── Tabela de dados ── */
   const colunas = [
-    "OC", "Equipe", "Processo", "Base",
-    "UTD", "CI?", "Qtd CI", "Horas", "Dias",
-    "Dt Solicitacao", "Dt Conclusao"
-  ];
+  "OC", "Equipe", "Processo", "Base",
+  "UTD", "CI?", "Qtd CI", "Notificada",
+  "Horas", "Dias",
+  "Dt Solicitacao", "Dt Conclusao"
+];
 
   const linhas = listaOrdenada.map(function(d) {
     const tempo    = calcularTempo(d.data, d.dataConclusao);
     const processo = processoDisplay[processos[d.eq]] || "-";
     const base     = bases[d.eq] || "-";
     return [
-      gerarNumOC(d.oc, d.mes),
-      d.eq,
-      processo,
-      base,
-      d.utd,
-      d.possuiCi === "SIM" ? "SIM" : "NAO",
-      d.possuiCi === "SIM" ? String(d.ci) : "-",
-      tempo.horas !== null ? tempo.horas + "h" : "-",
-      tempo.dias  !== null ? tempo.dias  + "d" : "-",
-      fmtDataCompleta(d.data),
-      fmtDataCompleta(d.dataConclusao)
-    ];
+  gerarNumOC(d.oc, d.mes),
+  d.eq,
+  processo,
+  base,
+  d.utd,
+  d.possuiCi === "SIM" ? "SIM" : "NAO",
+  d.possuiCi === "SIM" ? String(d.ci) : "-",
+  d.notificada || "NAO",
+  tempo.horas !== null ? tempo.horas + "h" : "-",
+  tempo.dias  !== null ? tempo.dias  + "d" : "-",
+  fmtDataCompleta(d.data),
+  fmtDataCompleta(d.dataConclusao)
+];
   });
 
   doc.autoTable({
